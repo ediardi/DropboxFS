@@ -8,8 +8,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/wait.h>
-#include <unistd.h>
-#include <sys/types.h>
 
 int upload_to_dropbox(const char *local_path, const char *dropbox_path) {
     char command[1024];
@@ -44,28 +42,22 @@ int delete_from_dropbox(const char *dropbox_path) {
 
 static int do_getattr(const char *path, struct stat *stbuf) {
     memset(stbuf, 0, sizeof(struct stat));
-    
-    char temp_path[1024];
-    snprintf(temp_path, sizeof(temp_path), "/tmp%s", path);
 
-    char command[1024];
-    snprintf(command, sizeof(command), "dbxcli get %s %s", path, temp_path);
-    int ret = system(command);
-
-    if (ret != 0) {
-        stbuf->st_mode = 0x4000 | 0755;
+    if (strcmp(path, "/") == 0) {
+        stbuf->st_mode = S_IFDIR | 0755;
         stbuf->st_nlink = 2;
+    } else {
+        stbuf->st_mode = S_IFREG | 0644;
+        stbuf->st_nlink = 1;
+        stbuf->st_size = 1024; // Dummy size, should be replaced with actual file size
     }
-    else
-    {
-        return stat(temp_path,&stbuf);
-    }
+
     return 0;
 }
 
 static int do_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) {
-    filler(buf, ".", NULL, 0, 0);
-    filler(buf, "..", NULL, 0, 0);
+    filler(buf, ".", NULL, 0);
+    filler(buf, "..", NULL, 0);
 
     char command[1024];
     snprintf(command, sizeof(command), "dbxcli ls %s > /tmp/dropbox_ls.txt", path);
@@ -86,7 +78,7 @@ static int do_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t
     while (fgets(line, sizeof(line), ls_file)) {
         char *filename = strtok(line, " \t\n");
         if (filename) {
-            filler(buf, filename, NULL, 0, 0);
+            filler(buf, filename, NULL, 0);
         }
     }
     fclose(ls_file);
