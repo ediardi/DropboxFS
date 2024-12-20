@@ -1,5 +1,6 @@
 #define FUSE_USE_VERSION 31
 #include <fuse3/fuse.h>
+#include <sys/stat.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -57,11 +58,11 @@ static int do_getattr(const char *path, struct stat *stbuf) {
         path = path to the folder
         stbuf = struct stat with metadata abaout the file
     */
-    (void) fi; // Unused parameter
+    //(void) fi; // Unused parameter
     memset(stbuf, 0, sizeof(struct stat)); // Initialize struct with 0
     if (strcmp(path, "/") == 0) { 
         // Root directory
-        stbuf->st_mode = S_IFDIR | 0755;
+        //stbuf->st_mode = S_IFDIR | 0755;
         /*
             S_IFDIR = it is a directory
 
@@ -75,7 +76,7 @@ static int do_getattr(const char *path, struct stat *stbuf) {
         // (.) for itself and (..) for its parent
     } else {
          // Any other file
-        stbuf->st_mode = S_IFREG | 0644;
+        //stbuf->st_mode = S_IFREG | 0644;
         /*
             S_IFREG = regular file
             Permissions:
@@ -150,17 +151,11 @@ static struct fuse_operations dropboxfs_oper = {
 };
 
 int main(int argc, char *argv[]) {
-    const char *local_path = "testfile.txt";
-    const char *dropbox_path = "/testfile.txt";
+    const char *local_path = "main.c";
+    const char *dropbox_path = "/main.c";
 
     // Create a dummy local file to upload
-    FILE *f = fopen(local_path, "w");
-    if (!f) {
-        perror("Failed to create local file");
-        return 1;
-    }
-    fprintf(f, "Hello, Dropbox! This is a test file.\n");
-    fclose(f);
+
 
     if (upload_to_dropbox(local_path, dropbox_path) == 0) {
         printf("File upload succeeded!\n");
@@ -173,5 +168,6 @@ int main(int argc, char *argv[]) {
     // } else {
     //     printf("File deletion failed.\n");
     // }
-    return fuse_main(argc, argv, &dropboxfs_oper, NULL);
+    //return fuse_main(argc, argv, &dropboxfs_oper, NULL);
+    return 0;
 }
