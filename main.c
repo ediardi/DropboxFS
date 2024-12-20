@@ -8,10 +8,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/wait.h>
-#include <unistd.h>
-#include <sys/types.h>
 
-int upload_to_dropbox(const char *local_path, const char *dropbox_path) {
+int upload_to_dropbox(const char *local_path, const char *dropbox_path) { // WORKS
     char command[1024];
     snprintf(command, sizeof(command), "dbxcli put %s %s", local_path, dropbox_path);
     int ret = system(command);
@@ -26,7 +24,7 @@ int upload_to_dropbox(const char *local_path, const char *dropbox_path) {
     return 0;
 }
 
-int delete_from_dropbox(const char *dropbox_path) {
+int delete_from_dropbox(const char *dropbox_path) { // WORKS
     char command[1024];
     snprintf(command, sizeof(command), "dbxcli rm %s", dropbox_path);
     int ret = system(command);
@@ -44,24 +42,21 @@ int delete_from_dropbox(const char *dropbox_path) {
 
 static int do_getattr(const char *path, struct stat *stbuf) {
     memset(stbuf, 0, sizeof(struct stat));
-    
-    char temp_path[1024];
-    snprintf(temp_path, sizeof(temp_path), "/tmp%s", path);
 
-    char command[1024];
-    snprintf(command, sizeof(command), "dbxcli get %s %s", path, temp_path);
-    int ret = system(command);
-
-    if (ret != 0) {
-        stbuf->st_mode = 0x4000 | 0755;
+    if (strcmp(path, "/") == 0) {
+        stbuf->st_mode = S_IFDIR | 0755;
         stbuf->st_nlink = 2;
+    } else {
+        stbuf->st_mode = S_IFREG | 0644;
+        stbuf->st_nlink = 1;
+        stbuf->st_size = 1024; // Dummy size, should be replaced with actual file size
     }
-    else
-    {
-        return stat(temp_path,&stbuf);
-    }
+
     return 0;
 }
+
+
+
 
 static int do_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) {
     filler(buf, ".", NULL, 0, 0);
@@ -153,7 +148,7 @@ static int do_write(const char *path, const char *buf, size_t size, off_t offset
     return size;
 }
 
-static int do_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
+static int do_create(const char *path, mode_t mode, struct fuse_file_info *fi) { // WORKS
     FILE *local_file = fopen(path + 1, "w"); // + 1 renunta la /
     if (!local_file) {
         perror("fopen");
@@ -169,7 +164,7 @@ static int do_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     return 0;
 }
 
-static int do_unlink(const char *path) {
+static int do_unlink(const char *path) { // WORKS
     if (unlink(path + 1) != 0) {
         perror("unlink");
         return -errno;
@@ -183,7 +178,7 @@ static int do_unlink(const char *path) {
     return 0;
 }
 
-static int do_mkdir(const char *path, mode_t mode) {
+static int do_mkdir(const char *path, mode_t mode) {  // WORKS
     if (mkdir(path + 1, mode) != 0) {
         perror("mkdir");
         return -errno;
@@ -200,7 +195,7 @@ static int do_mkdir(const char *path, mode_t mode) {
     return 0;
 }
 
-static int do_rmdir(const char *path) {
+static int do_rmdir(const char *path) { // WORKS
     if (rmdir(path + 1) != 0) {
         perror("rmdir");
         return -errno;
@@ -214,7 +209,7 @@ static int do_rmdir(const char *path) {
     return 0;
 }
 
-static int do_rename(const char *from, const char *to, unsigned int flags) {
+static int do_rename(const char *from, const char *to, unsigned int flags) { //WORKS
     if (rename(from + 1, to + 1) != 0) {
         perror("rename");
         return -errno;
@@ -245,5 +240,59 @@ static struct fuse_operations dropbox_oper = {
 };
 
 int main(int argc, char *argv[]) {
+    // return fuse_main(argc, argv, &dropbox_oper, NULL);
+    // do_mkdir("/TestDir2", 0);
+    // do_rmdir("/TestDir");
+    // do_rename("/TestDir2", "/TestDir3", 0);
+    
+
+
+
+    // const char *test_path = "/testfile.txt";  // Simulated path within the mounted filesystem
+    // mode_t test_mode = 0644;                 // Standard file permissions
+    // struct fuse_file_info test_fi;           // Dummy struct, not used in this implementation
+
+    // printf("Testing do_create function...\n");
+
+    // int result = do_create(test_path, test_mode, &test_fi);
+    // if (result == 0) {
+    //     printf("do_create succeeded for path: %s\n", test_path);
+    // } else {
+    //     printf("do_create failed for path: %s with error code: %d\n", test_path, result);
+    // }
+
+
+    // do_unlink(test_path);
+
+
+    // const char *test_path = "/testfile.txt"; // Simulated path
+    // const char *local_test_path = "testfile.txt"; // Corresponding local file
+    // char write_buf[] = "This is a test data for write operation.";
+    // size_t write_size = sizeof(write_buf);
+    // char read_buf[1024]; // Buffer to read into
+    // off_t offset = 0; // Start from the beginning of the file
+    // struct fuse_file_info dummy_fi; // Dummy file_info struct
+    
+    // // Step 1: Test do_write
+    // printf("Testing do_write...\n");
+    // int write_result = do_write(test_path, write_buf, write_size, offset, &dummy_fi);
+    // if (write_result > 0) {
+    //     printf("do_write succeeded, wrote %d bytes\n", write_result);
+    // } else {
+    //     printf("do_write failed with error code: %d\n", write_result);
+    // }
+
+    // // Step 2: Test do_read
+    // printf("\nTesting do_read...\n");
+    // int read_result = do_read(test_path, read_buf, sizeof(read_buf), offset, &dummy_fi);
+    // if (read_result > 0) {
+    //     printf("do_read succeeded, read %d bytes: %.*s\n", read_result, read_result, read_buf);
+    // } else {
+    //     printf("do_read failed with error code: %d\n", read_result);
+    // }
+
+
     return fuse_main(argc, argv, &dropbox_oper, NULL);
+
+    // return 0;
 }
