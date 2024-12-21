@@ -196,25 +196,12 @@ static int do_readdir( const char *path, void *buffer, fuse_fill_dir_t filler, o
 		char line[256];
 		while (fgets(line, sizeof(line), fp)) {
 			char *filename = strtok(line, " \t\n");
-			if (filename) {
+			while(filename != NULL)
+			{
 				filler(buffer, strrchr(filename,'/')+1, NULL, 0);
 				printf("OUTPUT: %s\n", filename);
 				fflush(NULL);
-				int flag=1;
-				while(flag==1)
-				{
-					filename = strtok(NULL, " \t\n");
-					if(filename)
-					{
-						filler(buffer, strrchr(filename,'/')+1, NULL, 0);
-						printf("OUTPUT: %s\n", filename);
-						fflush(NULL);
-					}
-					else
-					{
-						flag=0;
-					}
-				}
+				filename = strtok(NULL, " \t\n");
 			}
 		}
 
