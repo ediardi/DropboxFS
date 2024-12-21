@@ -1,7 +1,5 @@
 # DropboxFS
 
-## Prezentare Generală
-
 Acest proiect implementează un sistem de fișiere simplu, utilizând FUSE (Filesystem in Userspace), care interacționează cu Dropbox. Permite utilizatorilor să creeze directoare, fișiere și să scrie conținut în fișiere, sincronizând automat aceste modificări în Dropbox folosind utilitarul `dbxcli`.
 
 ---
