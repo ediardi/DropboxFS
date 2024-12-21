@@ -50,10 +50,12 @@ Pentru a executa proiectul, este nevoie să faci mount sistemului de fișiere di
 gcc lsysf.c -o lsysf 'pkg-config fuse --cflags --libs'
 ./lsysf -f ~/[folder-ul în care dorești să faci mount]
 ```
+Pentru executarea operațiilor, este nevoie să deschizi un nou terminal în folder-ul în care ai făcut mount.
 ## Realizarea unmount a sistemului de fișiere:
 ``` bash
 fusermount -u ~/[folder-ul în care ai făcut mount]
 ```
+Pentru ca această comandă să funcționeze, trebuie să ieși din folder-ul în care ai făcut mount în terminalul în care ai executat operații pe sistemul de fișiere. Execuția programului se încheie odată cu rularea comenzii de unmount.
  
 
 
