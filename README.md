@@ -1,4 +1,4 @@
-# Documentație Proiect: Sistem de Fisiere FUSE cu Dropbox
+# DropboxFS
 
 ## Prezentare Generală
 
