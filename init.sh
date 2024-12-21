@@ -6,8 +6,10 @@ sudo mv dbxcli /usr/local/bin
 sudo dbxcli account
 sudo apt update
 sudo apt install libfuse3-dev
+sudo apt install libfuse-dev
 sudo apt update
 sudo apt install fuse3
+sudo apt install fuse
 sudo apt-get install pkg-config
 
 
