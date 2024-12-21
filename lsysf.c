@@ -60,7 +60,7 @@ void add_file( const char *filename )
     snprintf(temp_path, sizeof(temp_path), "/tmp/%s", filename);	
 
 	// Create empty file and upload to Dropbox
-	FILE *local_file = fopen(temp_path + 1, "w");
+	FILE *local_file = fopen(temp_path, "w");
     if (!local_file) {
         perror("fopen");
         return;
@@ -116,13 +116,13 @@ void write_to_file( const char *path, const char *new_content )
 		
 	strcpy( files_content[ file_idx ], new_content );
 
-	path++;
+	// path++;
 
 	char temp_path[1024];
     snprintf(temp_path, sizeof(temp_path), "/tmp/%s", path);	
 
 	// Create empty file and upload to Dropbox
-	FILE *local_file = fopen(temp_path + 1, "w");
+	FILE *local_file = fopen(temp_path, "w");
     if (!local_file) {
         perror("fopen");
         return;
