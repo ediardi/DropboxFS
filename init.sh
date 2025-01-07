@@ -16,7 +16,7 @@ sudo apt install gcc
 sudo gcc main.c -o main $(pkg-config fuse --cflags --libs)
 read -p "Enter mount path: " mntpath
 echo $mntpath
-sudo ./main -f $mntpath
 sudo echo RUNNING!
 sudo echo open the given path in a new terminal!
 sudo echo "dont forget to unmount when finished using $ fusermount -u [specified path]"
+sudo ./main -f $mntpath
