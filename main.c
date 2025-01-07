@@ -1,111 +1,235 @@
-#define FUSE_USE_VERSION 31
+#define FUSE_USE_VERSION 30
 
-#include <fuse3/fuse.h>
-#include <string.h>
+#include <fuse.h>
 #include <stdio.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <time.h>
+#include <string.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <sys/wait.h>
 
-int upload_to_dropbox(const char *local_path, const char *dropbox_path) { // WORKS
-    char command[1024];
-    snprintf(command, sizeof(command), "dbxcli put %s %s", local_path, dropbox_path);
-    int ret = system(command);
-    if (ret == -1) {
-        perror("Error executing dbxcli command");
-        return -1;
-    } else if (WEXITSTATUS(ret) != 0) {
-        fprintf(stderr, "dbxcli command failed with exit code %d\n", WEXITSTATUS(ret));
-        return -1;
-    }
-    printf("File uploaded successfully: %s -> %s\n", local_path, dropbox_path);
-    return 0;
-}
+// ... //
 
-int delete_from_dropbox(const char *dropbox_path) { // WORKS
-    char command[1024];
-    snprintf(command, sizeof(command), "dbxcli rm %s", dropbox_path);
-    int ret = system(command);
-    if (ret == -1) {
-        perror("Error executing dbxcli command");
-        return -1;
-    } else if (WEXITSTATUS(ret) != 0) {
-        fprintf(stderr, "dbxcli command failed with exit code %d\n", WEXITSTATUS(ret));
-        return -1;
-    }
-    printf("File deleted successfully: %s\n", dropbox_path);
-    return 0;
-}
-
-
-static int do_getattr(const char *path, struct stat *stbuf) {
-    memset(stbuf, 0, sizeof(struct stat));
-
-    if (strcmp(path, "/") == 0) {
-        stbuf->st_mode = S_IFDIR | 0755;
-        stbuf->st_nlink = 2;
-    } else {
-        stbuf->st_mode = S_IFREG | 0644;
-        stbuf->st_nlink = 1;
-        stbuf->st_size = 1024; // Dummy size, should be replaced with actual file size
-    }
-
-    return 0;
-}
-
-
-
-
-static int do_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) {
-    filler(buf, ".", NULL, 0, 0);
-    filler(buf, "..", NULL, 0, 0);
-
-    char command[1024];
-    snprintf(command, sizeof(command), "dbxcli ls %s > /tmp/dropbox_ls.txt", path);
+void add_dir( const char *dir_name )
+{
+	// Upload dir pe Dropbox
+	char command[1024];
+    snprintf(command, sizeof(command), "dbxcli mkdir %s", dir_name);
     int ret = system(command);
 
-    if (ret != 0) {
-        fprintf(stderr, "Failed to list Dropbox folder: %s\n", path);
+
+    if (ret == -1 || WEXITSTATUS(ret) != 0) {
+        fprintf(stderr, "Failed to create Dropbox folder: %s\n", dir_name);
         return -EIO;
     }
 
-    FILE *ls_file = fopen("/tmp/dropbox_ls.txt", "r");
-    if (!ls_file) {
+}
+
+int is_dir( const char *path )
+{
+    char command[1024];
+    snprintf(command, sizeof(command), "dbxcli ls %s", path);
+    int ret = system(command);
+
+	if(ret == 0)
+	{
+		snprintf(command, sizeof(command), "dbxcli revs %s", path);
+		ret = system(command);
+		if(ret!=0)
+			return 1;
+	}
+	return 0;
+}
+
+void add_file( const char *filename )
+{
+
+	char temp_path[1024];
+    snprintf(temp_path, sizeof(temp_path), "/tmp/%s", filename);	
+
+	// Create empty file and upload to Dropbox
+	FILE *local_file = fopen(temp_path, "w");
+    if (!local_file) {
         perror("fopen");
-        return -EIO;
+        return;
     }
+    fclose(local_file); 
 
-    char line[256];
-    while (fgets(line, sizeof(line), ls_file)) {
-        char *filename = strtok(line, " \t\n");
-        if (filename) {
-            filler(buf, filename, NULL, 0, 0);
-        }
+    char command[1024];
+    snprintf(command, sizeof(command), "dbxcli put %s %s", temp_path, filename);
+    int ret = system(command);
+    if (ret == -1) {
+        perror("Error executing dbxcli command");
+        return;
+    } else if (WEXITSTATUS(ret) != 0) {
+        fprintf(stderr, "dbxcli command failed with exit code %d\n", WEXITSTATUS(ret));
+        return;
     }
-    fclose(ls_file);
+    printf("File uploaded successfully: %s -> %s\n", temp_path, filename);
 
-    return 0;
 }
 
+int is_file( const char *path )
+{
+	
+	//char temp_path[1024];
+    //snprintf(temp_path, sizeof(temp_path), "/tmp%s", path);
 
-static int do_open(const char *path, struct fuse_file_info *fi) {
     char command[1024];
-    snprintf(command, sizeof(command), "dbxcli stat %s > /dev/null 2>&1", path);
+    //snprintf(command, sizeof(command), "dbxcli get %s %s", path, temp_path);
+	snprintf(command, sizeof(command), "dbxcli revs %s", path);
     int ret = system(command);
 
-    if (ret != 0) {
-        fprintf(stderr, "File not found in Dropbox: %s\n", path);
-        return -ENOENT;
-    }
-
-    return 0;
+	if(ret == 0)
+		return 1;
+	return 0;
 }
 
+void write_to_file( const char *path, const char *new_content )
+{
 
-static int do_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
-    char temp_path[1024];
+	char temp_path[1024];
+    snprintf(temp_path, sizeof(temp_path), "/tmp/%s", path);	
+
+	// Create empty file and upload to Dropbox
+	FILE *local_file = fopen(temp_path, "w");
+    if (!local_file) {
+        perror("fopen");
+        return;
+    }
+    fwrite(new_content, 1, strlen(new_content), local_file);
+    fclose(local_file); 
+
+    char command[1024];
+    snprintf(command, sizeof(command), "dbxcli put %s %s", temp_path, path);
+    int ret = system(command);
+    if (ret == -1) {
+        perror("Error executing dbxcli command");
+        return;
+    } else if (WEXITSTATUS(ret) != 0) {
+        fprintf(stderr, "dbxcli command failed with exit code %d\n", WEXITSTATUS(ret));
+        return;
+    }
+    printf("File uploaded successfully: %s -> %s\n", temp_path, path);
+
+
+}
+
+// ... //
+
+static int do_getattr( const char *path, struct stat *st )
+{
+	char command[1024];
+    snprintf(command, sizeof(command), "echo attr path %s", path);
+	system(command);
+	//debug lines
+
+
+
+	st->st_uid = getuid(); // The owner of the file/directory is the user who mounted the filesystem
+	st->st_gid = getgid(); // The group of the file/directory is the same as the group of the user who mounted the filesystem
+	st->st_atime = time( NULL ); // The last "a"ccess of the file/directory is right now
+	st->st_mtime = time( NULL ); // The last "m"odification of the file/directory is right now
+	
+	if (strcmp(path, "/Input") == 0) {
+        // Attributes for the /Input directory
+        st->st_mode = S_IFDIR | 0755;  // Directory with rwxr-xr-x permissions
+        st->st_nlink = 2;              // Directory link count
+    } else if (strcmp(path, "/Input/output") == 0) {
+        // Attributes for the /Input/output file
+        st->st_mode = S_IFREG | 0644;  // Regular file with rw-r--r-- permissions
+        st->st_nlink = 1;              // Regular file link count
+        st->st_size = 2048;  
+		// sometimes the kernel want the atributes for /Input and /Input/output.
+		// we do not have these files in our structure and don't know why the kernel does this
+		// but we need to return some data
+	} else
+	if ( strcmp( path, "/" ) == 0 || is_dir( path ) == 1 )
+	//if it's root directory or another folder
+	{
+		st->st_mode = S_IFDIR | 0755;
+		st->st_nlink = 2; // Why "two" hardlinks instead of "one"? The answer is here: http://unix.stackexchange.com/a/101536
+		// mode set to directory
+	}
+	else if ( is_file( path ) == 1 )
+	{
+		st->st_mode = S_IFREG | 0644;
+		st->st_nlink = 1;
+		st->st_size = 1024;
+		// mode set to file
+	}
+	else
+	{
+		system("echo nodir nofile");
+		return -ENOENT;
+	}
+	
+	return 0;
+}
+
+static int do_readdir( const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi )
+{
+
+	printf(path);
+	fflush(NULL);
+	system("echo readdir");
+	//debug lines
+
+	filler( buffer, ".", NULL, 0 ); // Current Directory
+	filler( buffer, "..", NULL, 0 ); // Parent Directory
+	//filler populates the return buffer ,respecting conventions(from which ls will get file names)
+	//the second argument is the file/folder name
+	//https://www.cs.hmc.edu/~geoff/classes/hmc.cs135.201109/homework/fuse/fuse_doc.html#:~:text=Readdir%20Function,path%20doesn%27t%20exist.
+
+	if ( strcmp( path, "/" ) == 0 || is_dir( path ) == 1 )
+	{
+		char buf[4086];
+		FILE* fp;
+		char command[1024];
+    	snprintf(command, sizeof(command), "dbxcli ls %s", path);
+		if ((fp = popen(command, "r")) == NULL) {
+			printf("Error opening pipe!\n");
+			return -1;
+		}
+		// popen opens a virtual file that contains the output of the command as if it was displayed in terminal
+		// the command run is "dbxcli ls [path]"
+		// dbxcli ls returns a string with folder and file names separeated by " ", /t and /n
+
+		char line[256];
+		while (fgets(line, sizeof(line), fp)) {
+			char *filename = strtok(line, " \t\n");
+			while(filename != NULL)
+			{
+				filler(buffer, strrchr(filename,'/')+1, NULL, 0);
+				//we are only interested in the realtive filename to populate the buffer
+				//we don't want ls to print the absolute paths
+				// file = strrchr(filename,'/')+1 (filename is the absolute path)
+
+				printf("OUTPUT: %s\n", filename);
+				fflush(NULL);
+				//debug lines
+
+				filename = strtok(NULL, " \t\n");
+				//get next file path
+			}
+		}
+
+		//
+
+		if (pclose(fp)) {
+			printf("Command not found or exited with error status\n");
+			return -1;
+		}
+	}
+	
+	return 0;
+}
+
+static int do_read( const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *fi )
+{
+
+	char temp_path[1024];
     snprintf(temp_path, sizeof(temp_path), "/tmp%s", path);
 
     char command[1024];
@@ -124,69 +248,19 @@ static int do_read(const char *path, char *buf, size_t size, off_t offset, struc
     }
 
     fseek(file, offset, SEEK_SET);
-    size_t bytes_read = fread(buf, 1, size, file);
+    size_t bytes_read = fread(buffer, 1, size, file);
     fclose(file);
 
     return bytes_read;
 }
 
-
-static int do_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
-    FILE *local_file = fopen(path + 1, "w"); // + 1 renunta la /
-    if (!local_file) {
-        perror("fopen");
-        return -errno;
-    }
-    fwrite(buf, 1, size, local_file);
-    fclose(local_file);
-
-    if (upload_to_dropbox(path + 1, path) != 0) {
-        fprintf(stderr, "Failed to upload %s to Dropbox\n", path);
-        return -EIO;
-    }
-
-    return size;
-}
-
-static int do_create(const char *path, mode_t mode, struct fuse_file_info *fi) { // WORKS
-    FILE *local_file = fopen(path + 1, "w"); // + 1 renunta la /
-    if (!local_file) {
-        perror("fopen");
-        return -errno;
-    }
-    fclose(local_file);
-
-    if (upload_to_dropbox(path + 1, path) != 0) {
-        fprintf(stderr, "Failed to upload %s to Dropbox\n", path);
-        return -EIO;
-    }
-
-    return 0;
-}
-
-static int do_unlink(const char *path) { // WORKS
-    if (unlink(path + 1) != 0) {
-        perror("unlink");
-        return -errno;
-    }
-
-    if (delete_from_dropbox(path) != 0) {
-        fprintf(stderr, "Failed to delete %s from Dropbox\n", path);
-        return -EIO;
-    }
-
-    return 0;
-}
-
-static int do_mkdir(const char *path, mode_t mode) {  // WORKS
-    if (mkdir(path + 1, mode) != 0) {
-        perror("mkdir");
-        return -errno;
-    }
-
-    char command[1024];
+static int do_mkdir( const char *path, mode_t mode )
+{
+	char command[1024];
     snprintf(command, sizeof(command), "dbxcli mkdir %s", path);
     int ret = system(command);
+
+	
     if (ret == -1 || WEXITSTATUS(ret) != 0) {
         fprintf(stderr, "Failed to create Dropbox folder: %s\n", path);
         return -EIO;
@@ -195,104 +269,31 @@ static int do_mkdir(const char *path, mode_t mode) {  // WORKS
     return 0;
 }
 
-static int do_rmdir(const char *path) { // WORKS
-    if (rmdir(path + 1) != 0) {
-        perror("rmdir");
-        return -errno;
-    }
-
-    if (delete_from_dropbox(path) != 0) {
-        fprintf(stderr, "Failed to delete Dropbox folder: %s\n", path);
-        return -EIO;
-    }
-
-    return 0;
+static int do_mknod( const char *path, mode_t mode, dev_t rdev )
+{
+	path++;
+	add_file( path );
+	
+	return 0;
 }
 
-static int do_rename(const char *from, const char *to, unsigned int flags) { //WORKS
-    if (rename(from + 1, to + 1) != 0) {
-        perror("rename");
-        return -errno;
-    }
-
-    char command[1024];
-    snprintf(command, sizeof(command), "dbxcli mv %s %s", from, to);
-    int ret = system(command);
-    if (ret == -1 || WEXITSTATUS(ret) != 0) {
-        fprintf(stderr, "Failed to rename %s to %s on Dropbox\n", from, to);
-        return -EIO;
-    }
-
-    return 0;
+static int do_write( const char *path, const char *buffer, size_t size, off_t offset, struct fuse_file_info *info )
+{
+	write_to_file( path, buffer );
+	
+	return size;
 }
 
-static struct fuse_operations dropbox_oper = {
-        .getattr = do_getattr,
-        .readdir = do_readdir,
-        .open = do_open,
-        .read = do_read,
-        .write = do_write,
-        .create = do_create,
-        .unlink = do_unlink,
-        .mkdir = do_mkdir,
-        .rmdir = do_rmdir,
-        .rename = do_rename,
+static struct fuse_operations operations = {
+    .getattr	= do_getattr,
+    .readdir	= do_readdir,
+    .read		= do_read,
+    .mkdir		= do_mkdir,
+    .mknod		= do_mknod,
+    .write		= do_write,
 };
 
-int main(int argc, char *argv[]) {
-    // return fuse_main(argc, argv, &dropbox_oper, NULL);
-    // do_mkdir("/TestDir2", 0);
-    // do_rmdir("/TestDir");
-    // do_rename("/TestDir2", "/TestDir3", 0);
-    
-
-
-
-    // const char *test_path = "/testfile.txt";  // Simulated path within the mounted filesystem
-    // mode_t test_mode = 0644;                 // Standard file permissions
-    // struct fuse_file_info test_fi;           // Dummy struct, not used in this implementation
-
-    // printf("Testing do_create function...\n");
-
-    // int result = do_create(test_path, test_mode, &test_fi);
-    // if (result == 0) {
-    //     printf("do_create succeeded for path: %s\n", test_path);
-    // } else {
-    //     printf("do_create failed for path: %s with error code: %d\n", test_path, result);
-    // }
-
-
-    // do_unlink(test_path);
-
-
-    // const char *test_path = "/testfile.txt"; // Simulated path
-    // const char *local_test_path = "testfile.txt"; // Corresponding local file
-    // char write_buf[] = "This is a test data for write operation.";
-    // size_t write_size = sizeof(write_buf);
-    // char read_buf[1024]; // Buffer to read into
-    // off_t offset = 0; // Start from the beginning of the file
-    // struct fuse_file_info dummy_fi; // Dummy file_info struct
-    
-    // // Step 1: Test do_write
-    // printf("Testing do_write...\n");
-    // int write_result = do_write(test_path, write_buf, write_size, offset, &dummy_fi);
-    // if (write_result > 0) {
-    //     printf("do_write succeeded, wrote %d bytes\n", write_result);
-    // } else {
-    //     printf("do_write failed with error code: %d\n", write_result);
-    // }
-
-    // // Step 2: Test do_read
-    // printf("\nTesting do_read...\n");
-    // int read_result = do_read(test_path, read_buf, sizeof(read_buf), offset, &dummy_fi);
-    // if (read_result > 0) {
-    //     printf("do_read succeeded, read %d bytes: %.*s\n", read_result, read_result, read_buf);
-    // } else {
-    //     printf("do_read failed with error code: %d\n", read_result);
-    // }
-
-
-    return fuse_main(argc, argv, &dropbox_oper, NULL);
-
-    // return 0;
+int main( int argc, char *argv[] )
+{
+	return fuse_main( argc, argv, &operations, NULL );
 }

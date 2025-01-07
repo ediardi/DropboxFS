@@ -47,8 +47,8 @@ sudo apt-get install pkg-config
 ## Compilarea și executarea proiectului
 Pentru a executa proiectul, este nevoie să faci mount sistemului de fișiere din Dropbox într-un folder local.
 ``` bash
-gcc lsysf.c -o lsysf 'pkg-config fuse --cflags --libs'
-./lsysf -f ~/[folder-ul în care dorești să faci mount]
+gcc main.c -o main 'pkg-config fuse --cflags --libs'
+./main -f ~/[folder-ul în care dorești să faci mount]
 ```
 Pentru executarea operațiilor, este nevoie să deschizi un nou terminal în folder-ul în care ai făcut mount.
 ## Realizarea unmount a sistemului de fișiere:

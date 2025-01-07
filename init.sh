@@ -8,16 +8,15 @@ sudo chmod +x dbxcli
 sudo mv dbxcli /usr/local/bin
 sudo dbxcli account
 sudo apt update
-sudo apt install libfuse3-dev
 sudo apt install libfuse-dev
 sudo apt update
-sudo apt install fuse3
 sudo apt install fuse
 sudo apt-get install pkg-config
 sudo apt install gcc
-sudo gcc lsysf.c -o lsysf $(pkg-config fuse --cflags --libs)
+sudo gcc main.c -o main $(pkg-config fuse --cflags --libs)
 read -p "Enter mount path: " mntpath
-sudo ./lsysf -f $mntpath
+echo $mntpath
+sudo ./main -f $mntpath
 sudo echo RUNNING!
 sudo echo open the given path in a new terminal!
 sudo echo "dont forget to unmount when finished using $ fusermount -u [specified path]"
