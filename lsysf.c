@@ -11,20 +11,8 @@
 
 // ... //
 
-char dir_list[ 256 ][ 256 ];
-int curr_dir_idx = -1;
-
-char files_list[ 256 ][ 256 ];
-int curr_file_idx = -1;
-
-char files_content[ 256 ][ 256 ];
-int curr_file_content_idx = -1;
-
 void add_dir( const char *dir_name )
 {
-	curr_dir_idx++;
-	strcpy( dir_list[ curr_dir_idx ], dir_name );
-
 	// Upload dir pe Dropbox
 	char command[1024];
     snprintf(command, sizeof(command), "dbxcli mkdir %s", dir_name);
@@ -38,24 +26,23 @@ void add_dir( const char *dir_name )
 
 int is_dir( const char *path )
 {
-	path++; // Eliminating "/" in the path
-	
-	for ( int curr_idx = 0; curr_idx <= curr_dir_idx; curr_idx++ )
-		if ( strcmp( path, dir_list[ curr_idx ] ) == 0 )
+    char command[1024];
+    snprintf(command, sizeof(command), "dbxcli ls %s", path);
+    int ret = system(command);
+
+	if(ret == 0)
+	{
+		snprintf(command, sizeof(command), "dbxcli revs %s", path);
+		ret = system(command);
+		if(ret!=0)
 			return 1;
-	
+	}
 	return 0;
 }
 
 void add_file( const char *filename )
 {
-	curr_file_idx++;
-	strcpy( files_list[ curr_file_idx ], filename );
-	
-	curr_file_content_idx++;
-	strcpy( files_content[ curr_file_content_idx ], "" );
 
-	
 	char temp_path[1024];
     snprintf(temp_path, sizeof(temp_path), "/tmp/%s", filename);	
 
@@ -79,44 +66,26 @@ void add_file( const char *filename )
     }
     printf("File uploaded successfully: %s -> %s\n", temp_path, filename);
 
-
 }
 
 int is_file( const char *path )
 {
-	path++; // Eliminating "/" in the path
 	
-	for ( int curr_idx = 0; curr_idx <= curr_file_idx; curr_idx++ )
-		if ( strcmp( path, files_list[ curr_idx ] ) == 0 )
-			return 1;
-	
+	//char temp_path[1024];
+    //snprintf(temp_path, sizeof(temp_path), "/tmp%s", path);
+
+    char command[1024];
+    //snprintf(command, sizeof(command), "dbxcli get %s %s", path, temp_path);
+	snprintf(command, sizeof(command), "dbxcli revs %s", path);
+    int ret = system(command);
+
+	if(ret == 0)
+		return 1;
 	return 0;
-}
-
-int get_file_index( const char *path )
-{
-
-	path++; // Eliminating "/" in the path
-	
-	for ( int curr_idx = 0; curr_idx <= curr_file_idx; curr_idx++ )
-		if ( strcmp( path, files_list[ curr_idx ] ) == 0 )
-			return curr_idx;
-	
-	return -1;
 }
 
 void write_to_file( const char *path, const char *new_content )
 {
-
-
-	int file_idx = get_file_index( path );
-	
-	if ( file_idx == -1 ) // No such file
-		return;
-		
-	strcpy( files_content[ file_idx ], new_content );
-
-	// path++;
 
 	char temp_path[1024];
     snprintf(temp_path, sizeof(temp_path), "/tmp/%s", path);	
@@ -149,11 +118,27 @@ void write_to_file( const char *path, const char *new_content )
 
 static int do_getattr( const char *path, struct stat *st )
 {
+	char command[1024];
+    snprintf(command, sizeof(command), "echo attr path %s", path);
+	system(command);
+	//printf(path);
+	//printf('\n');
+	//fflush(NULL);
 	st->st_uid = getuid(); // The owner of the file/directory is the user who mounted the filesystem
 	st->st_gid = getgid(); // The group of the file/directory is the same as the group of the user who mounted the filesystem
 	st->st_atime = time( NULL ); // The last "a"ccess of the file/directory is right now
 	st->st_mtime = time( NULL ); // The last "m"odification of the file/directory is right now
 	
+	if (strcmp(path, "/Input") == 0) {
+        // Attributes for the /Input directory
+        st->st_mode = S_IFDIR | 0755;  // Directory with rwxr-xr-x permissions
+        st->st_nlink = 2;              // Directory link count
+    } else if (strcmp(path, "/Input/output") == 0) {
+        // Attributes for the /Input/output file
+        st->st_mode = S_IFREG | 0644;  // Regular file with rw-r--r-- permissions
+        st->st_nlink = 1;              // Regular file link count
+        st->st_size = 2048;  
+	} else
 	if ( strcmp( path, "/" ) == 0 || is_dir( path ) == 1 )
 	{
 		st->st_mode = S_IFDIR | 0755;
@@ -167,6 +152,7 @@ static int do_getattr( const char *path, struct stat *st )
 	}
 	else
 	{
+		system("echo nodir nofile");
 		return -ENOENT;
 	}
 	
@@ -175,16 +161,54 @@ static int do_getattr( const char *path, struct stat *st )
 
 static int do_readdir( const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi )
 {
+
+	printf(path);
+	fflush(NULL);
+	system("echo readdir");
 	filler( buffer, ".", NULL, 0 ); // Current Directory
 	filler( buffer, "..", NULL, 0 ); // Parent Directory
-	
-	if ( strcmp( path, "/" ) == 0 ) // If the user is trying to show the files/directories of the root directory show the following
+
+	if ( strcmp( path, "/" ) == 0 || is_dir( path ) == 1 )
 	{
-		for ( int curr_idx = 0; curr_idx <= curr_dir_idx; curr_idx++ )
-			filler( buffer, dir_list[ curr_idx ], NULL, 0);
-	
-		for ( int curr_idx = 0; curr_idx <= curr_file_idx; curr_idx++ )
-			filler( buffer, files_list[ curr_idx ], NULL, 0);
+		char buf[4086];
+		FILE* fp;
+		char command[1024];
+    	snprintf(command, sizeof(command), "dbxcli ls %s", path);
+		if ((fp = popen(command, "r")) == NULL) {
+			printf("Error opening pipe!\n");
+			return -1;
+		}
+
+		/*
+		while (fgets(buf, 4086, fp) != NULL) {
+			int i=0;
+			while(i<4086)
+			{
+				while(buf[i]!='/'&&i<4086)
+					i++;
+				
+				filler( buffer, buf, NULL, 0);
+				printf("OUTPUT: %s", buf);
+			}
+		}
+		*/
+
+		char line[256];
+		while (fgets(line, sizeof(line), fp)) {
+			char *filename = strtok(line, " \t\n");
+			while(filename != NULL)
+			{
+				filler(buffer, strrchr(filename,'/')+1, NULL, 0);
+				printf("OUTPUT: %s\n", filename);
+				fflush(NULL);
+				filename = strtok(NULL, " \t\n");
+			}
+		}
+
+		if (pclose(fp)) {
+			printf("Command not found or exited with error status\n");
+			return -1;
+		}
 	}
 	
 	return 0;
@@ -192,24 +216,43 @@ static int do_readdir( const char *path, void *buffer, fuse_fill_dir_t filler, o
 
 static int do_read( const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *fi )
 {
-	int file_idx = get_file_index( path );
-	
-	if ( file_idx == -1 )
-		return -1;
-	
-	char *content = files_content[ file_idx ];
-	
-	memcpy( buffer, content + offset, size );
 
-	return strlen( content ) - offset;
+	char temp_path[1024];
+    snprintf(temp_path, sizeof(temp_path), "/tmp%s", path);
+
+    char command[1024];
+    snprintf(command, sizeof(command), "dbxcli get %s %s", path, temp_path);
+    int ret = system(command);
+
+    if (ret != 0) {
+        fprintf(stderr, "Failed to download file: %s\n", path);
+        return -EIO;
+    }
+
+    FILE *file = fopen(temp_path, "r");
+    if (!file) {
+        perror("fopen");
+        return -EIO;
+    }
+
+    fseek(file, offset, SEEK_SET);
+    size_t bytes_read = fread(buffer, 1, size, file);
+    fclose(file);
+
+    return bytes_read;
 }
 
 static int do_mkdir( const char *path, mode_t mode )
 {
-	path++;
-	add_dir( path );
-	
-	return 0;
+	char command[1024];
+    snprintf(command, sizeof(command), "dbxcli mkdir %s", path);
+    int ret = system(command);
+    if (ret == -1 || WEXITSTATUS(ret) != 0) {
+        fprintf(stderr, "Failed to create Dropbox folder: %s\n", path);
+        return -EIO;
+    }
+
+    return 0;
 }
 
 static int do_mknod( const char *path, mode_t mode, dev_t rdev )
